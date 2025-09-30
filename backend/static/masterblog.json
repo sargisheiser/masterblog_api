@@ -4,18 +4,41 @@
     "title": "Masterblog API",
     "version": "1.0.0"
   },
-  "servers": [{ "url": "http://localhost:5002" }],
+  "servers": [
+    { "url": "http://localhost:5002" }
+  ],
   "tags": [
-    { "name": "Post", "description": "Post API - CRUD operations" }
+    { "name": "Post", "description": "Post API - CRUD" }
   ],
   "paths": {
     "/api/posts": {
       "get": {
-        "summary": "Returns all posts",
+        "summary": "Returns all posts (with optional sorting)",
         "produces": ["application/json"],
         "tags": ["Post"],
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "type": "string",
+            "enum": ["title", "content", "author", "date"],
+            "description": "Field to sort by"
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "type": "string",
+            "enum": ["asc", "desc"],
+            "description": "Sort order (ascending or descending)"
+          }
+        ],
         "responses": {
-          "200": { "description": "Successful operation" }
+          "200": {
+            "description": "Successful operation"
+          },
+          "400": {
+            "description": "Invalid sort field or direction"
+          }
         }
       },
       "post": {
@@ -33,7 +56,9 @@
               "type": "object",
               "properties": {
                 "title": { "type": "string" },
-                "content": { "type": "string" }
+                "content": { "type": "string" },
+                "author": { "type": "string" },
+                "date": { "type": "string", "example": "2025-09-30" }
               }
             }
           }
@@ -41,6 +66,76 @@
         "responses": {
           "201": { "description": "Post created successfully" },
           "400": { "description": "Invalid input" }
+        }
+      }
+    },
+    "/api/posts/{post_id}": {
+      "put": {
+        "summary": "Update a post",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Post"],
+        "parameters": [
+          {
+            "name": "post_id",
+            "in": "path",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "description": "Fields to update",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "title": { "type": "string" },
+                "content": { "type": "string" },
+                "author": { "type": "string" },
+                "date": { "type": "string" }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Post updated successfully" },
+          "400": { "description": "Invalid input" },
+          "404": { "description": "Post not found" }
+        }
+      },
+      "delete": {
+        "summary": "Delete a post",
+        "produces": ["application/json"],
+        "tags": ["Post"],
+        "parameters": [
+          {
+            "name": "post_id",
+            "in": "path",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": { "description": "Post deleted successfully" },
+          "404": { "description": "Post not found" }
+        }
+      }
+    },
+    "/api/posts/search": {
+      "get": {
+        "summary": "Search posts by title, content, author or date",
+        "produces": ["application/json"],
+        "tags": ["Post"],
+        "parameters": [
+          { "name": "title", "in": "query", "type": "string" },
+          { "name": "content", "in": "query", "type": "string" },
+          { "name": "author", "in": "query", "type": "string" },
+          { "name": "date", "in": "query", "type": "string" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of matching posts"
+          }
         }
       }
     }

@@ -1,147 +1,145 @@
+import json
+import os
+from datetime import datetime
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_swagger_ui import get_swaggerui_blueprint
-from datetime import datetime
-
-
-SWAGGER_URL = "/api/docs"
-API_URL = "/static/masterblog.json"
-
 
 app = Flask(__name__)
 CORS(app)
 
+SWAGGER_URL = "/api/docs"
+API_URL = "/static/masterblog.json"
 
 swagger_ui_blueprint = get_swaggerui_blueprint(
-   SWAGGER_URL,
-   API_URL,
-   config={"app_name": "Masterblog API"}
+    SWAGGER_URL,
+    API_URL,
+    config={"app_name": "Masterblog API"}
 )
 app.register_blueprint(swagger_ui_blueprint, url_prefix=SWAGGER_URL)
 
+POSTS_FILE = os.path.join(os.path.dirname(__file__), "posts.json")
 
-POSTS = [
-   {
-       "id": 1,
-       "title": "First Post",
-       "content": "This is the first post.",
-       "author": "Admin",
-       "date": "2025-09-30"
-   },
-   {
-       "id": 2,
-       "title": "Second Post",
-       "content": "This is the second post.",
-       "author": "Jane Doe",
-       "date": "2025-09-29"
-   },
-]
+
+def load_posts():
+    if not os.path.exists(POSTS_FILE):
+        return []
+    try:
+        with open(POSTS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        return []
+
+
+def save_posts(posts):
+    with open(POSTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(posts, f, ensure_ascii=False, indent=2)
+
 
 @app.route("/api/posts", methods=["GET"])
 def get_posts():
-   sort = request.args.get("sort")
-   direction = request.args.get("direction", "asc")
+    posts = load_posts()
+    sort = request.args.get("sort")
+    direction = request.args.get("direction", "asc")
 
+    if sort:
+        valid_fields = {"title", "content", "author", "date"}
+        if sort not in valid_fields:
+            return jsonify({"error": f"Invalid sort field: {sort}"}), 400
 
-   posts = POSTS.copy()
+        reverse = direction == "desc"
 
+        if sort == "date":
+            posts.sort(
+                key=lambda p: datetime.strptime(p["date"], "%Y-%m-%d"),
+                reverse=reverse
+            )
+        else:
+            posts.sort(key=lambda p: p.get(sort, "").lower(), reverse=reverse)
 
-   if sort:
-       reverse = direction == "desc"
-
-
-       if sort not in ["title", "content", "author", "date"]:
-           return jsonify({"error": f"Invalid sort field: {sort}"}), 400
-
-
-       try:
-           if sort == "date":
-               posts.sort(
-                   key=lambda x: datetime.strptime(x["date"], "%Y-%m-%d"),
-                   reverse=reverse
-               )
-           else:
-               posts.sort(key=lambda x: x[sort].lower(), reverse=reverse)
-       except Exception as e:
-           return jsonify({"error": f"Sorting failed: {str(e)}"}), 400
-
-
-   return jsonify(posts), 200
+    return jsonify(posts)
 
 
 @app.route("/api/posts", methods=["POST"])
 def add_post():
-   data = request.get_json()
+    data = request.get_json()
 
-   if not data:
-       return jsonify({"error": "Request body must be JSON"}), 400
-   if "title" not in data or "content" not in data:
-       return jsonify({"error": "Missing required fields: title and content"}), 400
+    if not data:
+        return jsonify({"error": "Request body must be JSON"}), 400
+    if "title" not in data:
+        return jsonify({"error": "Missing required field: title"}), 400
+    if "content" not in data:
+        return jsonify({"error": "Missing required field: content"}), 400
+    if "author" not in data:
+        return jsonify({"error": "Missing required field: author"}), 400
+    if "date" not in data:
+        return jsonify({"error": "Missing required field: date"}), 400
 
+    posts = load_posts()
+    new_id = max([post["id"] for post in posts], default=0) + 1
+    new_post = {
+        "id": new_id,
+        "title": data["title"],
+        "content": data["content"],
+        "author": data["author"],
+        "date": data["date"]
+    }
 
-   new_id = max([post["id"] for post in POSTS], default=0) + 1
-
-   new_post = {
-       "id": new_id,
-       "title": data["title"],
-       "content": data["content"],
-       "author": data.get("author", "Anonymous"),
-       "date": data.get("date", datetime.today().strftime("%Y-%m-%d"))
-   }
-
-   POSTS.append(new_post)
-   return jsonify(new_post), 201
+    posts.append(new_post)
+    save_posts(posts)
+    return jsonify(new_post), 201
 
 @app.route("/api/posts/<int:post_id>", methods=["DELETE"])
 def delete_post(post_id):
-   global POSTS
-   post = next((p for p in POSTS if p["id"] == post_id), None)
+    posts = load_posts()
+    post = next((p for p in posts if p["id"] == post_id), None)
 
-   if post is None:
-       return jsonify({"error": f"Post with id {post_id} not found"}), 404
+    if post is None:
+        return jsonify({"error": f"Post with id {post_id} not found"}), 404
 
-   POSTS = [p for p in POSTS if p["id"] != post_id]
-   return jsonify({"message": f"Post with id {post_id} has been deleted successfully."}), 200
+    posts = [p for p in posts if p["id"] != post_id]
+    save_posts(posts)
+    return jsonify({"message": f"Post with id {post_id} has been deleted successfully."}), 200
 
 @app.route("/api/posts/<int:post_id>", methods=["PUT"])
 def update_post(post_id):
-   post = next((p for p in POSTS if p["id"] == post_id), None)
+    posts = load_posts()
+    post = next((p for p in posts if p["id"] == post_id), None)
 
-   if post is None:
-       return jsonify({"error": f"Post with id {post_id} not found"}), 404
+    if post is None:
+        return jsonify({"error": f"Post with id {post_id} not found"}), 404
 
-   data = request.get_json()
-   if not data:
-       return jsonify({"error": "No input data provided"}), 400
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No input data provided"}), 400
 
-   post["title"] = data.get("title", post["title"])
-   post["content"] = data.get("content", post["content"])
-   post["author"] = data.get("author", post["author"])
-   post["date"] = data.get("date", post["date"])
+    post["title"] = data.get("title", post["title"])
+    post["content"] = data.get("content", post["content"])
+    post["author"] = data.get("author", post["author"])
+    post["date"] = data.get("date", post["date"])
 
-   return jsonify(post), 200
+    save_posts(posts)
+    return jsonify(post), 200
 
 @app.route("/api/posts/search", methods=["GET"])
 def search_posts():
-   title_query = request.args.get("title", "").lower()
-   content_query = request.args.get("content", "").lower()
-   author_query = request.args.get("author", "").lower()
-   date_query = request.args.get("date", "")
+    title_query = request.args.get("title", "").lower()
+    content_query = request.args.get("content", "").lower()
+    author_query = request.args.get("author", "").lower()
+    date_query = request.args.get("date", "")
 
+    results = []
+    for post in load_posts():
+        matches_title = title_query in post["title"].lower() if title_query else True
+        matches_content = content_query in post["content"].lower() if content_query else True
+        matches_author = author_query in post["author"].lower() if author_query else True
+        matches_date = date_query == post["date"] if date_query else True
 
-   results = []
-   for post in POSTS:
-       matches_title = title_query in post["title"].lower() if title_query else True
-       matches_content = content_query in post["content"].lower() if content_query else True
-       matches_author = author_query in post["author"].lower() if author_query else True
-       matches_date = date_query in post["date"] if date_query else True
+        if matches_title and matches_content and matches_author and matches_date:
+            results.append(post)
 
-
-       if matches_title and matches_content and matches_author and matches_date:
-           results.append(post)
-
-   return jsonify(results), 200
+    return jsonify(results), 200
 
 if __name__ == "__main__":
-   app.run(host="0.0.0.0", port=5002, debug=True)
+    app.run(host="0.0.0.0", port=5002, debug=True)
 
