@@ -1,102 +1,98 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from flask_swagger_ui import get_swaggerui_blueprint
 
 app = Flask(__name__)
 CORS(app)
 
+
+SWAGGER_URL = "/api/docs"
+API_URL = "/static/masterblog.json"
+
+
+swagger_ui_blueprint = get_swaggerui_blueprint(
+   SWAGGER_URL,
+   API_URL,
+   config={"app_name": "Masterblog API"}
+)
+app.register_blueprint(swagger_ui_blueprint, url_prefix=SWAGGER_URL)
+
+
 POSTS = [
-    {"id": 1, "title": "First Post", "content": "This is the first post."},
-    {"id": 2, "title": "Second Post", "content": "This is the second post."},
+   {"id": 1, "title": "First Post", "content": "This is the first post."},
+   {"id": 2, "title": "Second Post", "content": "This is the second post."},
 ]
 
 
 @app.route("/api/posts", methods=["GET"])
 def get_posts():
-    sort_field = request.args.get("sort")
-    direction = request.args.get("direction", "asc")
+   return jsonify(POSTS)
 
-    posts = POSTS.copy()
-
-    if sort_field:
-        if sort_field not in ["title", "content"]:
-            return jsonify({"error": f"Invalid sort field: {sort_field}"}), 400
-
-        if direction not in ["asc", "desc"]:
-            return jsonify({"error": f"Invalid direction: {direction}"}), 400
-
-        reverse = True if direction == "desc" else False
-        posts.sort(key=lambda x: x[sort_field].lower(), reverse=reverse)
-
-    return jsonify(posts), 200
 
 @app.route("/api/posts", methods=["POST"])
 def add_post():
-    data = request.get_json()
+   data = request.get_json()
 
-    if not data:
-        return jsonify({"error": "Request body must be JSON"}), 400
-    if "title" not in data:
-        return jsonify({"error": "Missing required field: title"}), 400
-    if "content" not in data:
-        return jsonify({"error": "Missing required field: content"}), 400
+   if not data:
+       return jsonify({"error": "Request body must be JSON"}), 400
+   if "title" not in data:
+       return jsonify({"error": "Missing required field: title"}), 400
+   if "content" not in data:
+       return jsonify({"error": "Missing required field: content"}), 400
 
-    new_id = max([post["id"] for post in POSTS], default=0) + 1
+   new_id = max([post["id"] for post in POSTS], default=0) + 1
 
-    new_post = {
-        "id": new_id,
-        "title": data["title"],
-        "content": data["content"]
-    }
+   new_post = {
+       "id": new_id,
+       "title": data["title"],
+       "content": data["content"]
+   }
 
-    POSTS.append(new_post)
-    return jsonify(new_post), 201
+   POSTS.append(new_post)
+   return jsonify(new_post), 201
 
 @app.route("/api/posts/<int:post_id>", methods=["DELETE"])
 def delete_post(post_id):
-    global POSTS
-    post = next((p for p in POSTS if p["id"] == post_id), None)
+   global POSTS
+   post = next((p for p in POSTS if p["id"] == post_id), None)
 
-    if post is None:
-        return jsonify({"error": f"Post with id {post_id} not found"}), 404
+   if post is None:
+       return jsonify({"error": f"Post with id {post_id} not found"}), 404
 
-    POSTS = [p for p in POSTS if p["id"] != post_id]
-
-    return jsonify({"message": f"Post with id {post_id} has been deleted successfully."}), 200
+   POSTS = [p for p in POSTS if p["id"] != post_id]
+   return jsonify({"message": f"Post with id {post_id} has been deleted successfully."}), 200
 
 @app.route("/api/posts/<int:post_id>", methods=["PUT"])
 def update_post(post_id):
-    global POSTS
-    post = next((p for p in POSTS if p["id"] == post_id), None)
+   post = next((p for p in POSTS if p["id"] == post_id), None)
 
-    if post is None:
-        return jsonify({"error": f"Post with id {post_id} not found"}), 404
+   if post is None:
+       return jsonify({"error": f"Post with id {post_id} not found"}), 404
 
-    data = request.get_json()
+   data = request.get_json()
+   if not data:
+       return jsonify({"error": "No input data provided"}), 400
 
-    if not data:
-        return jsonify({"error": "No input data provided"}), 400
+   post["title"] = data.get("title", post["title"])
+   post["content"] = data.get("content", post["content"])
 
-    post["title"] = data.get("title", post["title"])
-    post["content"] = data.get("content", post["content"])
-
-    return jsonify(post), 200
+   return jsonify(post), 200
 
 @app.route("/api/posts/search", methods=["GET"])
 def search_posts():
-    title_query = request.args.get("title", "").lower()
-    content_query = request.args.get("content", "").lower()
+   title_query = request.args.get("title", "").lower()
+   content_query = request.args.get("content", "").lower()
 
-    results = []
-    for post in POSTS:
-        matches_title = title_query in post["title"].lower() if title_query else True
-        matches_content = content_query in post["content"].lower() if content_query else True
+   results = []
+   for post in POSTS:
+       matches_title = title_query in post["title"].lower() if title_query else True
+       matches_content = content_query in post["content"].lower() if content_query else True
 
-        if matches_title and matches_content:
-            results.append(post)
+       if matches_title and matches_content:
+           results.append(post)
 
-    return jsonify(results), 200
+   return jsonify(results), 200
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5002, debug=True)
-
+   app.run(host="0.0.0.0", port=5002, debug=True)
 
