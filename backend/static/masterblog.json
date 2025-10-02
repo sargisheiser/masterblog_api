@@ -5,7 +5,7 @@
     "version": "1.0.0"
   },
   "servers": [
-    { "url": "http://localhost:5002" }
+    { "url": "http://localhost:5000" }
   ],
   "tags": [
     { "name": "Post", "description": "Post API - CRUD" }
